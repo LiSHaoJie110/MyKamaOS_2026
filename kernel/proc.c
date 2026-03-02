@@ -127,6 +127,8 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->kama_syscall_trace=0; //创建新进程的时候设置为默认值0
+  
   return p;
 }
 
@@ -255,6 +257,8 @@ growproc(int n)
 
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
+//第 4 步：让子进程继承追踪状态
+// 实验要求：如果父进程被 trace 了，它 fork 出来的子进程也必须被 trace。
 int
 fork(void)
 {
@@ -296,6 +300,8 @@ fork(void)
   np->state = RUNNABLE;
 
   release(&np->lock);
+
+  np->kama_syscall_trace=p->kama_syscall_trace; //子进程继承父进程的这个参数
 
   return pid;
 }

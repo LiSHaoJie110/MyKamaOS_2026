@@ -95,3 +95,16 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+//第 2 步：实现 sys_trace 函数本体
+// 当用户在代码里调用 trace(mask) 时，内核需要有一个函数来接收并保存这个 mask。
+uint64
+sys_trace(void)
+{
+  int mask;
+  // argint 是 xv6 用来安全读取用户态传来的整数参数的函数
+  if(argint(0,&mask)<0)return -1; // 获取用户程序传入的数据
+  // myproc() 获取当前正在运行的进程
+  myproc()->kama_syscall_trace=mask; //设置调用进程的kama_syscall_trace掩码mask
+  return 0;
+}

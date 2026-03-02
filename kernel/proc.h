@@ -103,4 +103,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  uint64 kama_syscall_trace;//存储进程的系统调用跟踪掩码，用于记录那些系统调用需要被跟踪
+  //第 1 步：在内核中为进程“户口本”增加字段 进程控制块（pcb）
 };

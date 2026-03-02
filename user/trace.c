@@ -3,6 +3,7 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 
+//用户态的trace函数
 int
 main(int argc, char *argv[])
 {

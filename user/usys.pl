@@ -36,3 +36,5 @@ entry("getpid");
 entry("sbrk");
 entry("sleep");
 entry("uptime");
+entry("trace"); #为trace添加系统调用接口
+#user/usys.pl 就是一个 Perl 脚本，一般用于生成usys.S文件（比如自动生成系统调用相关的汇编/声明文件）
