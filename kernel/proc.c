@@ -128,7 +128,7 @@ found:
   p->context.sp = p->kstack + PGSIZE;
 
   p->kama_syscall_trace=0; //创建新进程的时候设置为默认值0
-  
+
   return p;
 }
 
@@ -697,5 +697,17 @@ procdump(void)
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+  }
+}
+
+//统计处于活动状态的进程
+//这个文件中有一个进程表struct proc proc[NPRoc]，记录了所有的进程，而每一个进程都有一个state属性，
+// 表示该进程是否在使用。因此可以得出思路:遍历proc进程表，判断当前进程是否在使用，是的话数量+1。代码:
+void
+kama_procnum(uint64* dst){
+  *dst = 0;
+  struct proc* p;
+  for (p = proc;p < &proc[NPROC];p++) {
+    if (p->state != UNUSED)(*dst)++;
   }
 }

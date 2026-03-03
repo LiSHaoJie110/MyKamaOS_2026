@@ -24,6 +24,9 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int trace(int);//用户态程序可以找到trace系统调用的跳板函数入口
+struct sysinfo;//声明这个结构体，使用户程序可以使用这个结构体
+int sysinfo(struct sysinfo*);//用户态程序可以找到sysinfo系统调用的跳板函数入口
+//就是程序里写的时候用这个写 函数声明 让用户程序可以像普通函数一样调用它。
 
 // ulib.c
 int stat(const char*, struct stat*);

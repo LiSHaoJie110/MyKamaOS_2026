@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h" //结构体
 
 uint64
 sys_exit(void)
@@ -106,5 +107,22 @@ sys_trace(void)
   if(argint(0,&mask)<0)return -1; // 获取用户程序传入的数据
   // myproc() 获取当前正在运行的进程
   myproc()->kama_syscall_trace=mask; //设置调用进程的kama_syscall_trace掩码mask
+  return 0;
+}
+uint64
+sys_sysinfo(void){
+  struct sysinfo info;//这个结构体此刻是存放在内核栈（Kernel Stack）上的。它是操作系统的绝对私有财产，外面的普通用户程序根本看不见、也摸不着它。
+  kama_freebytes(&info.freemem);// 获取空闲内存
+  kama_procnum(&info.nproc); //获取进程数量 填进去上面的结构体中
+
+  //获取到用户空间的sysinfo结构体地址后，要把内核空间的sysinfo结构体的数据复制过去，这样用户程序才能拿到数据。
+
+  //获取用户虚拟地址
+  uint64 dstaddr;
+  argaddr(0, &dstaddr);//请帮我拉开第 0 个抽屉（a0 寄存器），把里面的那个内存地址拿出来，赋值给 dstaddr 变量。”
+  
+  //从内核空间拷贝数据到用户空间
+  if (copyout (myproc()->pagetable, dstaddr, (char*)&info, sizeof info) < 0)//虚拟内存与页表隔离。
+    return -1;
   return 0;
 }

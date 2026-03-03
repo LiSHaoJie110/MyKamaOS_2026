@@ -20,9 +20,11 @@ main(int argc, char *argv[])
     exit(1);
   }
   
-  for(i = 2; i < argc && i < MAXARG; i++){
+  for(i = 2; i < argc && i < MAXARG; i++){//移花接木：整理参数柜子
     nargv[i-2] = argv[i];
   }
   exec(nargv[0], nargv);
   exit(0);
+// 我们前面讲过，exec 的作用是“夺舍”。它会把当前进程的内存代码全部清空，替换成 grep 的代码。
+// 但是！exec 绝对不会改变这个进程的 PID，也不会换掉这个进程在内核里的“户口本”（struct proc）
 }

@@ -105,6 +105,7 @@ extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_trace(void); //全局声明trace系统调用处理函数
+extern uint64 sys_sysinfo(void);//全局声明sysinfo系统调用处理函数
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -129,6 +130,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_trace]   sys_trace, //系统调用号与处理函数关联
+[SYS_sysinfo]   sys_sysinfo,
 };
 
 const char *kama_syscall_names[] = {
@@ -154,6 +156,7 @@ const char *kama_syscall_names[] = {
 [SYS_mkdir]   "mkdir",
 [SYS_close]   "close",
 [SYS_trace]   "trace",
+[SYS_sysinfo]   "sys_sysinfo",
 };
 
 //第 3 步：在“咽喉要道”实施拦截并打印（最核心！）
