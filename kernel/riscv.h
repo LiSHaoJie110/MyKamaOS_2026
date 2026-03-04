@@ -319,6 +319,16 @@ sfence_vma()
   asm volatile("sfence.vma zero, zero");
 }
 
+//获取当前 fp（frame pointer）寄存器的方法
+//fp 指向当前栈帧的开始地址，sp 指向当前栈帧的结束地址
+static inline uint64
+r_fp()
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x));
+  return x;
+}
+
 
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page
