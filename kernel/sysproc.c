@@ -47,8 +47,19 @@ sys_sbrk(void)
   if(argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
+  // if(growproc(n) < 0) 
+  //   return -1;
+  struct  proc* p =myproc();
+  if(n>0){
+    p->sz += n;//惰性分配
+  }
+  else if(p->sz+n >0){ //n<0 且 释放后内存还是大于零的 （是正常情况）
+    p->sz = uvmdealloc(p->pagetable,p->sz,p->sz+n); //释放内存 立即释放
+  }
+  else{
+    return -1; //异常
+  }
+  
   return addr;
 }
 
