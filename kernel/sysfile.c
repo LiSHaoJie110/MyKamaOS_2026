@@ -306,19 +306,19 @@ sys_open(void)
   } else {
     int symlink_depth = 0;
     while(1) { // recursively follow symlinks
-      if((ip = namei(path)) == 0){
+      if((ip = namei(path)) == 0){//解析路径 获取对应的inode
         end_op();
         return -1;
       }
       ilock(ip);
-      if(ip->type == T_SYMLINK && (omode & O_NOFOLLOW) == 0) {
-        if(++symlink_depth > 10) {
+      if(ip->type == T_SYMLINK && (omode & O_NOFOLLOW) == 0) {//如果当前指向的还是软连接则继续循环
+        if(++symlink_depth > 10) { //链接深度超过10曾就退出
           // too many layer of symlinks, might be a loop
           iunlockput(ip);
           end_op();
           return -1;
         }
-        if(readi(ip, 0, (uint64)path, 0, MAXPATH) < 0) {
+        if(readi(ip, 0, (uint64)path, 0, MAXPATH) < 0) { //读取链接的目标路径
           iunlockput(ip);
           end_op();
           return -1;
@@ -505,14 +505,14 @@ sys_pipe(void)
 }
 
 uint64
-sys_symlink(void)
+sys_symlink(void)//系统调用创建符号链接
 {
   struct inode *ip;
   char target[MAXPATH], path[MAXPATH];
   if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
     return -1;
 
-  begin_op();
+  begin_op();//begin_op()：进入日志事务，保证文件系统修改原子性。
 
   ip = create(path, T_SYMLINK, 0, 0);
   if(ip == 0){
@@ -520,7 +520,7 @@ sys_symlink(void)
     return -1;
   }
 
-  // use the first data block to store target path.
+  // 把目标路径写入符号链接内容
   if(writei(ip, 0, (uint64)target, 0, strlen(target)) < 0) {
     end_op();
     return -1;
