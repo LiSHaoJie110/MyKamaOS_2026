@@ -65,3 +65,7 @@
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
+// 为了尽量使得 map 的文件使用的地址空间不要和进程所使用的地址空间产生冲突，
+// 我们选择将 mmap 映射进来的文件 map 到尽可能高的位置，也就是刚好在 trapframe 下面。并且若有多个 mmap 的文件，则向下生长。
+// MMAP 所能使用的最后一个页+1
+#define MMAPEND TRAPFRAME
