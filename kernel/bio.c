@@ -22,16 +22,16 @@
 #include "defs.h"
 #include "fs.h"
 #include "buf.h"
-#define NBUFMAP_BUCKET 13
-#define BUFMAP_HASH(dev, blockno) ((((dev)<<27)|(blockno))%NBUFMAP_BUCKET)
+#define NBUFMAP_BUCKET 13 //哈希表中的桶号索引 质数个桶可以降低哈希冲突的可能性
+#define BUFMAP_HASH(dev, blockno) ((((dev)<<27)|(blockno))%NBUFMAP_BUCKET) //哈希索引
 
 struct {
   struct buf buf[NBUF];
   struct spinlock eviction_lock;
 
   // Hash map: dev and blockno to buf
-  struct buf bufmap[NBUFMAP_BUCKET];
-  struct spinlock bufmap_locks[NBUFMAP_BUCKET];
+  struct buf bufmap[NBUFMAP_BUCKET];//哈希表
+  struct spinlock bufmap_locks[NBUFMAP_BUCKET];//桶锁
 } bcache;
 
 void
@@ -65,11 +65,11 @@ bget(uint dev, uint blockno)
 {
   struct buf *b;
 
-  uint key = BUFMAP_HASH(dev, blockno);
+  uint key = BUFMAP_HASH(dev, blockno);// 获取 key 桶的锁
 
   acquire(&bcache.bufmap_locks[key]);
 
-  // Is the block already cached?
+   // 查找 blockno 的缓存是否存在，若是直接返回，若否继续执行
   for(b = bcache.bufmap[key].next; b; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
