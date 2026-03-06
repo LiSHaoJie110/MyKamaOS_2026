@@ -375,22 +375,49 @@ iunlockput(struct inode *ip)
 // Return the disk block address of the nth block in inode ip.
 // If there is no such block, bmap allocates one.
 static uint
-bmap(struct inode *ip, uint bn)
+bmap(struct inode *ip, uint bn)//把你给出的文件内逻辑块号（bn），翻译成磁盘上的物理块号（blockno）（块映射）
 {
   uint addr, *a;
   struct buf *bp;
-
+//如果bn小于直接块数量，则按直接映射处理
   if(bn < NDIRECT){
-    if((addr = ip->addrs[bn]) == 0)
-      ip->addrs[bn] = addr = balloc(ip->dev);
+    if((addr = ip->addrs[bn]) == 0)//如果对应物理块号为0表示还没分配，则分配一个物理块，建立映射
+      ip->addrs[bn] = addr = balloc(ip->dev);//去荒地里圈一块新地
     return addr;
   }
+//到这里是一级间接块 减去直接块的数量得到一级间接块的逻辑块号
   bn -= NDIRECT;
 
   if(bn < NINDIRECT){
-    // Load indirect block, allocating if necessary.
-    if((addr = ip->addrs[NDIRECT]) == 0)
-      ip->addrs[NDIRECT] = addr = balloc(ip->dev);
+    //如果间接块还没分配，分配一个
+    if((addr = ip->addrs[NDIRECT]) == 0)//0-NDIRECT-1是直接块
+      ip->addrs[NDIRECT] = addr = balloc(ip->dev);//可以映射256个块
+    
+    //获取刚分配的缓存块，检查bn对应的块 为0就是没有分配 建立映射
+    bp = bread(ip->dev, addr); //读块
+    a = (uint*)bp->data;//变成了一个完美的“字典数组”：a[0] 到 a[255]。
+    if((addr = a[bn]) == 0){
+      a[bn] = addr = balloc(ip->dev);
+      log_write(bp);//整个系统防灾/抗崩溃（Crash Recovery）机制的核心入口
+    }
+    brelse(bp); //建立映射结束释放掉缓存块
+    return addr;
+  }
+  //到这里是二级级间接块 减去直接块的数量得到一级间接块的逻辑块号
+  bn -= NINDIRECT;
+  if(bn < NINDIRECT * NINDIRECT) { 
+    if((addr = ip->addrs[NDIRECT+1]) == 0)
+      ip->addrs[NDIRECT+1] = addr = balloc(ip->dev);
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    if((addr = a[bn/NINDIRECT]) == 0){//bn处于二级索引中间的第bn/NINDIRECT个索引处
+      a[bn/NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    
+    //最后一级索引
+    bn %= NINDIRECT;
     bp = bread(ip->dev, addr);
     a = (uint*)bp->data;
     if((addr = a[bn]) == 0){
@@ -404,22 +431,26 @@ bmap(struct inode *ip, uint bn)
   panic("bmap: out of range");
 }
 
+
+//简单来说，bp = bread(...) 和 brelse(bp) 就是一对生死相依的孪生兄弟
+//bread 操作系统不仅把数据给你拉到了内存，还自动为你加上了一把排他性的睡眠锁（bp->lock） bread 还会把这个缓存块的引用计数（bp->refcnt）加 1
+//所以需要brelse释放一下
 // Truncate inode (discard contents).
 // Caller must hold ip->lock.
 void
-itrunc(struct inode *ip)
+itrunc(struct inode *ip) //释放该inode所映射的所有数据块
 {
-  int i, j;
+  int i, j,k;
   struct buf *bp;
   uint *a;
 
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
-      bfree(ip->dev, ip->addrs[i]);
+      bfree(ip->dev, ip->addrs[i]);//块释放
       ip->addrs[i] = 0;
     }
   }
-
+  //一级释放
   if(ip->addrs[NDIRECT]){
     bp = bread(ip->dev, ip->addrs[NDIRECT]);
     a = (uint*)bp->data;
@@ -431,7 +462,26 @@ itrunc(struct inode *ip)
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
   }
-
+  //二级释放
+  if(ip->addrs[NDIRECT+1]){
+    bp = bread(ip->dev, ip->addrs[NDIRECT+1]);
+    a = (uint*)bp->data;
+    for(j = 0; j < NINDIRECT; j++){
+      if(a[j]) {
+        struct buf *bp2 = bread(ip->dev, a[j]);
+        uint *a2 = (uint*)bp2->data;
+        for(k = 0; k < NINDIRECT; k++){
+          if(a2[k])
+            bfree(ip->dev, a2[k]);
+        }
+        brelse(bp2);
+        bfree(ip->dev, a[j]);
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT+1]);
+    ip->addrs[NDIRECT + 1] = 0;
+  }
   ip->size = 0;
   iupdate(ip);
 }
