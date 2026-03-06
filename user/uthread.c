@@ -10,16 +10,35 @@
 #define STACK_SIZE  8192
 #define MAX_THREAD  4
 
+struct context { //线程切换所需要的寄存器
+  uint64 ra;
+  uint64 sp;
+  //callee-saved 指的是被调用者负责保存/恢复的寄存器
+  // callee-saved
+  uint64 s0;
+  uint64 s1;
+  uint64 s2;
+  uint64 s3;
+  uint64 s4;
+  uint64 s5;
+  uint64 s6;
+  uint64 s7;
+  uint64 s8;
+  uint64 s9;
+  uint64 s10;
+  uint64 s11;
+};
 
-struct thread {
+struct thread {//线程
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
-
+  struct context ctx; //县城结构体中添加context结构体
 };
-struct thread all_thread[MAX_THREAD];
+struct thread all_thread[MAX_THREAD]; //数组里装的是线程
+//在内存布局上，all_thread[0].stack、all_thread[1].stack 和 all_thread[2].stack 是物理上连续排列的三块空间。
 struct thread *current_thread;
-extern void thread_switch(uint64, uint64);
-              
+extern void thread_switch(struct context* old, struct context* new);  //这个函数是汇编文件中写的 uthread_switch.S c文件不能直接操控代码  
+      
 void 
 thread_init(void)
 {
@@ -33,7 +52,7 @@ thread_init(void)
 }
 
 void 
-thread_schedule(void)
+thread_schedule(void) //转换线程的
 {
   struct thread *t, *next_thread;
 
@@ -63,20 +82,27 @@ thread_schedule(void)
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
+    thread_switch(&t->ctx, &next_thread->ctx); // 切换线程
   } else
     next_thread = 0;
 }
 
 void 
-thread_create(void (*func)())
+thread_create(void (*func)())//每个线程有自己的栈 这些栈不一定挨在一起 每个进程保存自己的栈信息
 {
   struct thread *t;
 
-  for (t = all_thread; t < all_thread + MAX_THREAD; t++) {
+  for (t = all_thread; t < all_thread + MAX_THREAD; t++) {//从头往后找找到是空的就停下来装线程
     if (t->state == FREE) break;
   }
   t->state = RUNNABLE;
   // YOUR CODE HERE
+  t->ctx.ra = (uint64)func;       // 返回地址
+  // thread_switch 的结尾会返回到 ra，从而运行线程代码
+  t->ctx.sp = (uint64)&t->stack + (STACK_SIZE - 1);  // 栈顶指针
+  // 将线程的栈指针指向其独立的栈，注意到栈的生长是从高地址到低地址，所以
+  // 要将 sp 设置为指向 stack 的最高地址    
+  
 }
 
 void 
