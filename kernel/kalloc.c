@@ -21,12 +21,25 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
-} kmem;
+} kmem[NCPU];// 为每个 CPU 分配独立的 freelist，并用独立的锁保护它。
+
+char *kmem_lock_names[] = {
+  "kmem_cpu_0",
+  "kmem_cpu_1",
+  "kmem_cpu_2",
+  "kmem_cpu_3",
+  "kmem_cpu_4",
+  "kmem_cpu_5",
+  "kmem_cpu_6",
+  "kmem_cpu_7",
+};
 
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
+  for(int i=0;i<NCPU;i++) { // 初始化所有锁
+    initlock(&kmem[i].lock, kmem_lock_names[i]);
+  }
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -56,10 +69,16 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  push_off();//关闭中断 防止在临界区中被中断打断并迁移/重入。
+
+  int cpu = cpuid();//获取cpu编号
+
+  acquire(&kmem[cpu].lock); //将释放的页插入到当前cpu的freelist中
+  r->next = kmem[cpu].freelist;
+  kmem[cpu].freelist = r;
+  release(&kmem[cpu].lock);
+
+  pop_off();//重新打开中断
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -69,14 +88,40 @@ void *
 kalloc(void)
 {
   struct run *r;
+  push_off();//关闭中断
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
+  int cpu = cpuid();
+
+  acquire(&kmem[cpu].lock);
+  if(!kmem[cpu].freelist) { // 当前cpu没有freelsit了  去其他cpu偷内存
+    int steal_left = 64; // 治理指定偷64个内存页
+    
+    for(int i=0;i<NCPU;i++) {
+      if(i == cpu) continue; // 不偷自己
+      acquire(&kmem[i].lock);
+      struct run *rr = kmem[i].freelist;
+      while(rr && steal_left) {
+        kmem[i].freelist = rr->next;//循环将i的freelist移动到当前的kmem中
+        rr->next = kmem[cpu].freelist;
+        kmem[cpu].freelist = rr;
+        rr = kmem[i].freelist;
+        steal_left--;
+      }
+      release(&kmem[i].lock);
+      if(steal_left == 0) break; // 偷到指定页数退出循环
+    }
+  }
+
+  r = kmem[cpu].freelist;
   if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+    kmem[cpu].freelist = r->next;
+  release(&kmem[cpu].lock);
+
+  pop_off();//打开中断
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+//上述代码可能产生死锁（cpu_a 尝试偷 cpu_b，cpu_b 尝试偷 cpu_a），
+// 可能的解决方案看本文评论区或 https://github.com/Miigon/blog/issues/8。
