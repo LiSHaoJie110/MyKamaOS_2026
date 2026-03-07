@@ -83,7 +83,7 @@ struct trapframe {
 struct vma { //虚拟内存区域结构体
   int valid; //该区域是否已被映射
   uint64 vastart; //开始地址
-  uint64 sz;      //大希奥
+  uint64 sz;      //大小
   struct file *f; //映射的文件
   int prot;       //权限
   int flags;      //标记内存的修改是否写回文件
@@ -115,5 +115,5 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  struct vma vmas[NVMA];
+  struct vma vmas[NVMA];       //mmap虚拟内存映射地址数组
 };

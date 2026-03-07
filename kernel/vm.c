@@ -434,6 +434,9 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   }
 }
 
+// 遍历页表，找到 addr_aligned 范围内的每一页。
+// 检查脏位 (PTE_D)：如果这一页被写过（Dirty），且 VMA 是 MAP_SHARED，就调用 filewrite 将物理页数据同步到磁盘。
+// 释放内存：调用 uvmunmap 将这些页面从页表中解绑，并 kfree 掉物理内存。
 void
 vmaunmap(pagetable_t pagetable, uint64 va, uint64 nbytes, struct vma *v)
 {

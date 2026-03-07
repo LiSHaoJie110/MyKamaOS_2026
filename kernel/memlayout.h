@@ -55,7 +55,7 @@
 // each surrounded by invalid guard pages.
 #define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PGSIZE)
 
-// User memory layout.
+// User memory layout.虚拟地址空间
 // Address zero first:
 //   text
 //   original data and bss

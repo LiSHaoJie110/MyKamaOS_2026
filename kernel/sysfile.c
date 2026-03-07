@@ -487,17 +487,17 @@ sys_pipe(void)
 }
 
 uint64
-sys_mmap(void)
+sys_mmap(void)//在vma数组中申请一个位置代表文件a
 {
   uint64 addr, sz, offset;
   int prot, flags, fd; struct file *f;
-
+  //读取传入参数
   if(argaddr(0, &addr) < 0 || argaddr(1, &sz) < 0 || argint(2, &prot) < 0
-    || argint(3, &flags) < 0 || argfd(4, &fd, &f) < 0 || argaddr(5, &offset) < 0 || sz == 0)
+    || argint(3, &flags) < 0 || argfd(4, &fd, &f) < 0 || argaddr(5, &offset) < 0 || sz == 0)//文件描述符转换为struct file
     return -1;
-  
-  if((!f->readable && (prot & (PROT_READ)))
-     || (!f->writable && (prot & PROT_WRITE) && !(flags & MAP_PRIVATE)))
+  //以下情况返回-1
+  if((!f->readable && (prot & (PROT_READ))) //源文件不可读 vma映射可读
+     || (!f->writable && (prot & PROT_WRITE) && !(flags & MAP_PRIVATE)))//源文件不可写vam映射为可写并且设置了将修改写回原文件
     return -1;
   
   sz = PGROUNDUP(sz);
@@ -512,10 +512,10 @@ sys_mmap(void)
   // our implementation maps file right below where the trapframe is,
   // from high addresses to low addresses.
 
-  // Find a free vma, and calculate where to map the file along the way.
+  // 遍历查询未使用过的vma并计算当前已使用的虚拟地址的最低地址
   for(int i=0;i<NVMA;i++) {
     struct vma *vv = &p->vmas[i];
-    if(vv->valid == 0) {
+    if(vv->valid == 0) {//找到空闲的就保存下来
       if(v == 0) {
         v = &p->vmas[i];
         // found free vma;
@@ -529,40 +529,41 @@ sys_mmap(void)
   if(v == 0){
     panic("mmap: no free vma");
   }
-  
+  //设置vma属性
   v->vastart = vaend - sz;
   v->sz = sz;
   v->prot = prot;
   v->flags = flags;
   v->f = f; // assume f->type == FD_INODE
+  //f指向了打开文件的状态struct file里面包含了文件的信息
   v->offset = offset;
-
-  filedup(v->f);
+  //增加源文件引用数
+  filedup(v->f);//增加 struct file 引用计数的函数
 
   return v->vastart;
 }
 
 uint64
-sys_munmap(void)//释放所有的vma
+sys_munmap(void)//释放掉vma映射的页
 {
   uint64 addr, sz;
 
-  if(argaddr(0, &addr) < 0 || argaddr(1, &sz) < 0 || sz == 0)
+  if(argaddr(0, &addr) < 0 || argaddr(1, &sz) < 0 || sz == 0)//从用户态拿到要释放的起始虚拟地址 addr 和长度 sz
     return -1;
 
   struct proc *p = myproc();
 
-  struct vma *v = findvma(p, addr);
+  struct vma *v = findvma(p, addr);//寻找对应的vma
   if(v == 0) {
     return -1;
   }
 
   if(addr > v->vastart && addr + sz < v->vastart + v->sz) {
-    // trying to "dig a hole" inside the memory range.
+    // 释放的区域不能在vma中打洞
     return -1;
   }
-
-  uint64 addr_aligned = addr;
+//如果用户释放的地址不是页对齐的（比如从 4097 开始），我们要把它向上取整到下一个页面边界。这保证了我们不会错误地删除掉还在使用的前半页数据。
+  uint64 addr_aligned = addr;//地址对齐
   if(addr > v->vastart) {
     addr_aligned = PGROUNDUP(addr);
   }
@@ -573,19 +574,21 @@ sys_munmap(void)//释放所有的vma
   
   vmaunmap(p->pagetable, addr_aligned, nunmap, v); // custom memory page unmap routine for mmapped pages.
 
-  if(addr <= v->vastart && addr + sz > v->vastart) { // unmap at the beginning
+  if(addr <= v->vastart && addr + sz > v->vastart) { //更新 VMA 状态（缩减范围）
     v->offset += addr + sz - v->vastart;
     v->vastart = addr + sz;
   }
   v->sz -= sz;
 
-  if(v->sz <= 0) {
+  if(v->sz <= 0) {//彻底释放vma
     fileclose(v->f);
     v->valid = 0;
   }
 
   return 0;  
 }
+
+//下面这两个函数都是在发生缺页异常的时候具体做的
 // 通过虚拟地址找到对应vma.
 struct vma *findvma(struct proc *p, uint64 va) {
   for(int i=0;i<NVMA;i++) {
@@ -611,21 +614,21 @@ int vmatrylazytouch(uint64 va) {
 
   // printf("vma mapping: %p => %d\n", va, v->offset + PGROUNDDOWN(va - v->vastart));
 
-  // allocate physical page
+  // 分配物理地址
   void *pa = kalloc();
   if(pa == 0) {
     panic("vmalazytouch: kalloc");
   }
   memset(pa, 0, PGSIZE);
   
-  // read data from disk
+  // 从磁盘读取文件
   begin_op();
   ilock(v->f->ip);
   readi(v->f->ip, 0, (uint64)pa, v->offset + PGROUNDDOWN(va - v->vastart), PGSIZE);
   iunlock(v->f->ip);
   end_op();
 
-  // set appropriate perms, then map it.
+
   int perm = PTE_U;
   if(v->prot & PROT_READ)
     perm |= PTE_R;
@@ -633,7 +636,7 @@ int vmatrylazytouch(uint64 va) {
     perm |= PTE_W;
   if(v->prot & PROT_EXEC)
     perm |= PTE_X;
-
+  // 建立映射
   if(mappages(p->pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W | PTE_U) < 0) {
     panic("vmalazytouch: mappages");
   }

@@ -70,7 +70,7 @@ usertrap(void)
   } else {
     uint64 va = r_stval(); //读取当前发生页面错误的地址
     if((r_scause() == 13 || r_scause() == 15)){ // vma lazy allocation
-      if(!vmatrylazytouch(va)) {
+      if(!vmatrylazytouch(va)) {//分配物理页
         goto unexpected_scause;
       }
     } else {

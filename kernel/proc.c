@@ -134,7 +134,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
-  for(int i=0;i<NVMA;i++) {
+  for(int i=0;i<NVMA;i++) {//初始化时清空vma数组
     p->vmas[i].valid = 0;
   }
   return p;
@@ -149,9 +149,9 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
-  for(int i = 0; i < NVMA; i++) {
+  for(int i = 0; i < NVMA; i++) {//释放进程前清空vmas数组
     struct vma *v = &p->vmas[i];
-    vmaunmap(p->pagetable, v->vastart, v->sz, v);
+    vmaunmap(p->pagetable, v->vastart, v->sz, v);//卸载页面脏页写回
   }
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
@@ -303,7 +303,7 @@ fork(void)
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
 
-  for(i = 0; i < NVMA; i++) {
+  for(i = 0; i < NVMA; i++) {//复制vmas 就是复制了父进程对文件的映射 子进程这段映射一样就可以了  父子进程内存空间独立真正用的时候在去磁盘拿
     struct vma *v = &p->vmas[i];
     if(v->valid) {
       np->vmas[i] = *v;
